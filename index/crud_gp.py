@@ -12,9 +12,9 @@ from tkinter import messagebox # Para pop-ups de confirmação e erro
 # ATENÇÃO: Substitua pelos seus dados de login do MySQL.
 DB_CONFIG = {
     'host': 'localhost',
-    'port': 3307, 
+    'port': 3306, 
     'user': 'root',
-    'password': 'admin',
+    'password': 'F&rradura01',
     'database': 'GestorPro_BD'
 }
 
@@ -37,14 +37,8 @@ def conectar_bd():
 
 # --- CREATE (Criar) ---
 def inserir_cargo(nome, gerenciar_estoque, fazer_vendas):
-    """
-    Insere um novo cargo na tabela 'cargo'.
-    """
-    
-    query = """
-    INSERT INTO cargo (cargo_nome, pode_gerenciar_estoque, pode_fazer_vendas) 
-    VALUES (%s, %s, %s)
-    """
+
+    query = "INSERT INTO cargo (cargo_nome, pode_gerenciar_estoque, pode_fazer_vendas) VALUES (%s, %s, %s)"
     
     conexao = conectar_bd()
     if conexao:
@@ -82,27 +76,43 @@ def listar_cargos():
     return None
 
 # --- UPDATE (Atualizar) ---
-def atualizar_cidade(ra_aluno, nova_cidade):
-    """Atualiza a cidade. Retorna (True, mensagem_sucesso) ou (False, mensagem_erro)."""
-    query = "UPDATE aluno SET cidade = %s WHERE RA = %s"
-    
+def atualizar_cargo(cargo_id, novo_nome, novo_estoque, novas_vendas):
+    """Atualiza somente os campos preenchidos."""
+
     conexao = conectar_bd()
-    if conexao:
-        try:
-            cursor = conexao.cursor()
-            cursor.execute(query, (nova_cidade, ra_aluno))
-            conexao.commit()
-            
-            if cursor.rowcount == 0:
-                return False, f"Nenhum aluno encontrado com o RA {ra_aluno}."
-            else:
-                return True, f"Cidade do aluno RA {ra_aluno} atualizada com sucesso."
-        except Error as e:
-            return False, f"Erro ao atualizar dados: {e}"
-        finally:
-            cursor.close()
-            conexao.close()
-    return False, "Falha ao conectar no banco de dados."
+    if not conexao:
+        return False, "Falha ao conectar no banco de dados."
+
+    try:
+        cursor = conexao.cursor(dictionary=True)
+
+        # 1) BUSCA os valores atuais
+        cursor.execute("SELECT * FROM cargo WHERE cargo_id = %s", (cargo_id,))
+        cargo_atual = cursor.fetchone()
+
+        if not cargo_atual:
+            return False, f"Nenhum cargo encontrado com ID {cargo_id}."
+
+        # 2) Decide o valor final de cada campo
+        nome_final = cargo_atual["cargo_nome"] if novo_nome is None else novo_nome
+        estoque_final = cargo_atual["pode_gerenciar_estoque"] if novo_estoque is None else novo_estoque
+        vendas_final = cargo_atual["pode_fazer_vendas"] if novas_vendas is None else novas_vendas
+
+        # 3) Executa o UPDATE
+        query = "UPDATE cargo SET cargo_nome = %s, pode_gerenciar_estoque = %s, pode_fazer_vendas = %s WHERE cargo_id = %s"
+
+        cursor.execute(query, (nome_final, estoque_final, vendas_final, cargo_id))
+        conexao.commit()
+
+        return True, "Cargo atualizado com sucesso."
+
+    except Error as e:
+        return False, f"Erro ao atualizar: {e}"
+
+    finally:
+        cursor.close()
+        conexao.close()
+
 
 # --- DELETE (Deletar) ---
 def deletar_cargo(cargo_id):
@@ -178,6 +188,9 @@ class AplicacaoCRUD:
         
         self.btn_deletar = ttk.Button(frame_botoes, text="Deletar", command=self.deletar_cargo_gui)
         self.btn_deletar.grid(row=0, column=1, padx=5)
+        
+        self.btn_atualizar = ttk.Button(frame_botoes, text="Atualizar", command=self.atualizar_cargo_gui)
+        self.btn_atualizar.grid(row=0, column=2, padx=5)
 
         # --- Frame para a Lista (Treeview) ---
         
@@ -302,6 +315,58 @@ class AplicacaoCRUD:
         
         # Atualiza a barra de status com o resultado.
         self.status_label.config(text=mensagem)
+        
+    def atualizar_cargo_gui(self):
+        try:
+            cargo_id = int(self.entry_id.get().strip())
+        except ValueError:
+            messagebox.showerror("Erro", "O ID deve ser um número inteiro.")
+            return
+        
+        novo_nome = self.entry_nome.get().strip()
+        novo_gerencia = self.entry_gerencia.get().strip().upper()
+        novo_venda = self.entry_venda.get().strip().upper()
+
+
+        # ---- Nome ----
+        if novo_nome == "":
+            novo_nome = None  # não atualizar
+
+        # ---- Gerência ----
+        if novo_gerencia == "":
+            novo_gerencia = None  # não atualizar
+        elif novo_gerencia in ("S", "1"):
+            novo_gerencia = 1
+        elif novo_gerencia in ("N", "0"):
+            novo_gerencia = 0
+        else:
+            messagebox.showerror("Erro", "Campo Gerência deve ser S/N ou 1/0.")
+            return
+
+        # ---- Vendas ----
+        if novo_venda == "":
+            novo_venda = None
+        elif novo_venda in ("S", "1"):
+            novo_venda = 1
+        elif novo_venda in ("N", "0"):
+            novo_venda = 0
+        else:
+            messagebox.showerror("Erro", "Campo Vendas deve ser S/N ou 1/0.")
+            return
+
+        # ---- Chama a função de atualização ----
+        sucesso, mensagem = atualizar_cargo(cargo_id, novo_nome, novo_gerencia, novo_venda)
+
+        if sucesso:
+            messagebox.showinfo("Sucesso", mensagem)
+            self.atualizar_treeview()
+            self.limpar_campos()
+        else:
+            messagebox.showerror("Erro", mensagem)
+
+       
+            
+        
 
     # def atualizar_aluno_gui(self):
     #     """Coleta o RA e a nova cidade para atualizar."""
