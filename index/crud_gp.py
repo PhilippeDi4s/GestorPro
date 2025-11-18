@@ -56,7 +56,6 @@ def inserir_cargo(nome, gerenciar_estoque, fazer_vendas):
 
 # --- READ (Ler/Consultar) ---
 def listar_cargos():
-    """Lista todos os alunos. Retorna uma lista de dicionários ou None se falhar."""
     query = "SELECT cargo_id, cargo_nome, IF (pode_gerenciar_estoque = 1, 'Sim', 'Não') AS pode_gerenciar_estoque, IF (pode_fazer_vendas = 1, 'Sim', 'Não') AS pode_fazer_vendas FROM cargo"
     
     conexao = conectar_bd()
@@ -66,7 +65,7 @@ def listar_cargos():
             cursor = conexao.cursor(dictionary=True)
             cursor.execute(query)
             resultados = cursor.fetchall()
-            return resultados # Retorna a lista de alunos
+            return resultados 
         except Error as e:
             messagebox.showerror("Erro de Leitura", f"Erro ao listar dados: {e}")
             return None
@@ -164,7 +163,7 @@ class AplicacaoCRUD:
         self.entry_nome = ttk.Entry(frame_formulario, width=40)
         self.entry_nome.grid(row=0, column=1, padx=5, pady=5)
         
-        ttk.Label(frame_formulario, text="ID:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        ttk.Label(frame_formulario, text="ID (p/Atualizar/Deletar):").grid(row=1, column=0, padx=5, pady=5, sticky="w")
         self.entry_id = ttk.Entry(frame_formulario)
         self.entry_id.grid(row=1, column=1, padx=5, pady=5)
         
@@ -214,7 +213,7 @@ class AplicacaoCRUD:
         self.tree.bind('<<TreeviewSelect>>', self.on_tree_select)
         
         # --- Barra de Status ---
-        self.status_label = ttk.Label(root, text="Bem-vindo! Clique em um aluno para selecioná-lo ou preencha os campos para adicionar.", relief=tk.SUNKEN, anchor=tk.W)
+        self.status_label = ttk.Label(root, text="Pronto.", relief=tk.SUNKEN, anchor=tk.W)
         self.status_label.pack(side=tk.BOTTOM, fill=tk.X)
 
         # --- Carregar dados iniciais ---     
@@ -316,6 +315,7 @@ class AplicacaoCRUD:
         # Atualiza a barra de status com o resultado.
         self.status_label.config(text=mensagem)
         
+        
     def atualizar_cargo_gui(self):
         try:
             cargo_id = int(self.entry_id.get().strip())
@@ -363,37 +363,6 @@ class AplicacaoCRUD:
             self.limpar_campos()
         else:
             messagebox.showerror("Erro", mensagem)
-
-       
-            
-        
-
-    # def atualizar_aluno_gui(self):
-    #     """Coleta o RA e a nova cidade para atualizar."""
-    #     ra_str = self.entry_ra.get().strip()
-    #     nova_cidade = self.entry_cidade.get().strip()
-        
-    #     if not ra_str or not nova_cidade:
-    #         messagebox.showwarning("Campos Faltando", "O 'RA' e a 'Cidade' devem ser preenchidos para atualizar.")
-    #         return
-
-    #     try:
-    #         ra = int(ra_str)
-    #     except ValueError:
-    #         messagebox.showerror("RA Inválido", "O RA deve ser um número.")
-    #         return
-            
-    #     # Chama a função do CRUD
-    #     sucesso, mensagem = atualizar_cidade(ra, nova_cidade)
-
-    #     if sucesso:
-    #         messagebox.showinfo("Sucesso", mensagem)
-    #         self.atualizar_treeview()
-    #         self.limpar_campos()
-    #     else:
-    #         messagebox.showerror("Erro ao Atualizar", mensagem)
-        
-    #     self.status_label.config(text=mensagem)
 
 
     def deletar_cargo_gui(self):
