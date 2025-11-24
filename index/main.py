@@ -2,7 +2,7 @@ from config.config_bd import conectar_bd
 from mysql.connector import Error
 from datetime import datetime
 from index.crud_cargos import JanelaCargos
-# from crud_funcionarios import JanelaFuncionarios
+from index.crud_funcionarios import JanelaFuncionarios
 
 import tkinter as tk
 from tkinter import ttk  
@@ -21,13 +21,13 @@ class Main:
         nav_header.pack()
         
         tk.Button(nav_header, text="Gerenciar Cargos", width=25, command=self.abrir_cargos).pack(pady=10)
-        # tk.Button(nav_header, text="Gerenciar Funcionários", command=self.abrir_funcionarios).pack()
+        tk.Button(nav_header, text="Gerenciar Funcionários",  width=25, command=self.abrir_funcionarios).pack(pady=10)
 
     def abrir_cargos(self):
         JanelaCargos(self.root)
         
-    # def abrir_funcionarios(self):
-    #     JanelaFuncionarios(self.root)
+    def abrir_funcionarios(self):
+        JanelaFuncionarios(self.root)
 
 
 

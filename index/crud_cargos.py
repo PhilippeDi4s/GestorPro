@@ -256,17 +256,17 @@ class JanelaCargos:
             messagebox.showwarning("Campos Vazios", "Todos os campos (exceto ID) devem ser preenchidos.")
             return 
         
-        if gerencia == "S":
+        if gerencia == "S" or gerencia == "SIM" or gerencia == "1":
             gerencia = 1
-        elif gerencia == "N":
+        elif gerencia == "N"  or gerencia == "NÃO" or gerencia == "0":
             gerencia = 0
         else:
             messagebox.showwarning("Valor incorreto","'Pode Gerenciar Estoque' só aceita os valores S e N.")
             return
             
-        if venda == "S":
+        if venda == "S" or venda == "SIM" or venda == "1":
             venda = 1
-        elif venda == "N":
+        elif venda == "N" or venda == "NÃO" or venda == "0":
             venda = 0
         else:
             messagebox.showwarning("Valor incorreto","'Pode Fazer Vendas' só aceita os valores S e N.")

@@ -5,21 +5,107 @@ import tkinter as tk
 from tkinter import ttk  # 'themed tk' para widgets mais modernos
 from tkinter import messagebox # Para pop-ups de confirmação e erro
 
-# --- 2. Funções do CRUD (A Lógica do Banco) ---
-# MODIFICADAS para retornar mensagens em vez de printar no console.
+# -----------------------------
+# 1. CONVERSORES DE DATA
+# -----------------------------
+
+def converter_para_mysql(data_br):
+    try:
+        return datetime.strptime(data_br, "%d/%m/%Y").strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+def converter_para_br(data_mysql):
+    try:
+        return datetime.strptime(data_mysql, "%Y-%m-%d").strftime("%d/%m/%Y")
+    except ValueError:
+        return ""
+        
+
+# -----------------------------
+# 2. VALIDAÇÃO DE CPF
+# -----------------------------
+
+def validar_cpf(cpf):
+    cpf = ''.join(filter(str.isdigit, cpf))
+
+    if len(cpf) != 11:
+        return False
+
+    if cpf == cpf[0] * 11:
+        return False
+
+    for i in range(9, 11):
+        soma = sum(int(cpf[num]) * ((i + 1) - num) for num in range(i))
+        digito = ((soma * 10) % 11) % 10
+        if digito != int(cpf[i]):
+            return False
+
+    return True
+
+
+# -----------------------------
+# 3. VALIDAÇÃO DE TELEFONE
+# -----------------------------
+
+def validar_telefone(telefone):
+    telefone = ''.join(filter(str.isdigit, telefone))
+    return 10 <= len(telefone) <= 11
+
+
+# -----------------------------
+# 4. VALIDAÇÃO DE DATAS
+# -----------------------------
+
+def validar_datas(data_adm_br, data_term_br):
+    data_adm = converter_para_mysql(data_adm_br)
+    if not data_adm:
+        return False, "Data de admissão inválida! Use o formato DD/MM/AAAA."
+
+    if data_term_br:
+        data_term = converter_para_mysql(data_term_br)
+        if not data_term:
+            return False, "Data de término inválida! Use o formato DD/MM/AAAA."
+
+        if datetime.strptime(data_term, "%Y-%m-%d") < datetime.strptime(data_adm, "%Y-%m-%d"):
+            return False, "A data de término não pode ser anterior à data de admissão."
+
+    return True, ""
 
 # --- CREATE (Criar) ---
-def inserir_cargo(nome, gerenciar_estoque, fazer_vendas):
+def inserir_funcionario(cargo_id, nome, email, cpf, telefone, data_admissao, data_termino, salario, ativo):
 
-    query = "INSERT INTO cargo (cargo_nome, pode_gerenciar_estoque, pode_fazer_vendas) VALUES (%s, %s, %s)"
+    # -------------------------
+    # VALIDAR CPF
+    # -------------------------
+    if not validar_cpf(cpf):
+        return False, "CPF inválido! Verifique e tente novamente."
+
+    # -------------------------
+    # VALIDAR TELEFONE
+    # -------------------------
+    if not validar_telefone(telefone):
+        return False, "Telefone inválido! Deve ter 10 ou 11 dígitos."
+
+    # -------------------------
+    # VALIDAR DATAS
+    # -------------------------
+    ok, erro = validar_datas(data_admissao, data_termino)
+    if not ok:
+        return False, erro
+
+    # Após validar, converter para MySQL:
+    data_admissao = converter_para_mysql(data_admissao)
+    data_termino = converter_para_mysql(data_termino) if data_termino else None
+    query = "INSERT INTO funcionario (cargo_id, nome, email, cpf, telefone, data_admissao, data_termino, salario, ativo) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
     
     conexao = conectar_bd()
     if conexao:
         try:
             cursor = conexao.cursor()
-            cursor.execute(query, (nome, gerenciar_estoque, fazer_vendas))
+            cursor.execute(query, (cargo_id, nome, email, cpf, telefone, data_admissao, data_termino, salario, ativo))
             conexao.commit()
-            return True, (f"\n-> Cargo '{nome}' criado com sucesso (ID: {cursor.lastrowid}).")
+            return True, (f"\n-> Funcionário '{nome}' Adicionado com sucesso (ID: {cursor.lastrowid}).")
         except Error as e:
             return False, f"Erro ao inserir dados: {e}"
         finally:
@@ -28,8 +114,8 @@ def inserir_cargo(nome, gerenciar_estoque, fazer_vendas):
     return False, "Falha ao conectar no banco de dados."
 
 # --- READ (Ler/Consultar) ---
-def listar_cargos():
-    query = "SELECT cargo_id, cargo_nome, IF (pode_gerenciar_estoque = 1, 'Sim', 'Não') AS pode_gerenciar_estoque, IF (pode_fazer_vendas = 1, 'Sim', 'Não') AS pode_fazer_vendas FROM cargo"
+def listar_funcionarios():
+    query = "SELECT funcionario_id, cargo_id, nome, email, cpf, telefone, data_admissao, data_termino, salario, IF (ativo = 1, 'Sim', 'Não') AS ativo FROM funcionario"
     
     conexao = conectar_bd()
     if conexao:
@@ -48,8 +134,75 @@ def listar_cargos():
     return None
 
 # --- UPDATE (Atualizar) ---
-def atualizar_cargo(cargo_id, novo_nome, novo_estoque, novas_vendas):
-    """Atualiza somente os campos preenchidos."""
+def atualizar_funcionario(funcionario_id, novo_cargo_id, novo_nome, novo_email, novo_cpf,
+                          novo_telefone, novo_data_admissao, novo_data_termino,
+                        novo_salario, novo_ativo):
+        # -----------------------------
+    # 1. CONVERSORES DE DATA
+    # -----------------------------
+
+    def converter_para_mysql(data_br):
+        try:
+            return datetime.strptime(data_br, "%d/%m/%Y").strftime("%Y-%m-%d")
+        except ValueError:
+            return None
+
+    def converter_para_br(data_mysql):
+        try:
+            return datetime.strptime(data_mysql, "%Y-%m-%d").strftime("%d/%m/%Y")
+        except ValueError:
+            return ""
+
+
+    # -----------------------------
+    # 2. VALIDAÇÃO DE CPF
+    # -----------------------------
+
+    def validar_cpf(cpf):
+        cpf = ''.join(filter(str.isdigit, cpf))
+
+        if len(cpf) != 11:
+            return False
+
+        if cpf == cpf[0] * 11:
+            return False
+
+        for i in range(9, 11):
+            soma = sum(int(cpf[num]) * ((i + 1) - num) for num in range(i))
+            digito = ((soma * 10) % 11) % 10
+            if digito != int(cpf[i]):
+                return False
+
+        return True
+
+
+    # -----------------------------
+    # 3. VALIDAÇÃO DE TELEFONE
+    # -----------------------------
+
+    def validar_telefone(telefone):
+        telefone = ''.join(filter(str.isdigit, telefone))
+        return 10 <= len(telefone) <= 11
+
+
+    # -----------------------------
+    # 4. VALIDAÇÃO DE DATAS
+    # -----------------------------
+
+    def validar_datas(data_adm_br, data_term_br):
+        data_adm = converter_para_mysql(data_adm_br)
+        if not data_adm:
+            return False, "Data de admissão inválida! Use o formato DD/MM/AAAA."
+
+        if data_term_br:
+            data_term = converter_para_mysql(data_term_br)
+            if not data_term:
+                return False, "Data de término inválida! Use o formato DD/MM/AAAA."
+
+            if datetime.strptime(data_term, "%Y-%m-%d") < datetime.strptime(data_adm, "%Y-%m-%d"):
+                return False, "A data de término não pode ser anterior à data de admissão."
+
+        return True, ""
 
     conexao = conectar_bd()
     if not conexao:
@@ -58,25 +211,57 @@ def atualizar_cargo(cargo_id, novo_nome, novo_estoque, novas_vendas):
     try:
         cursor = conexao.cursor(dictionary=True)
 
-        # 1) BUSCA os valores atuais
-        cursor.execute("SELECT * FROM cargo WHERE cargo_id = %s", (cargo_id,))
-        cargo_atual = cursor.fetchone()
+        # 1) Buscar valores atuais
+        cursor.execute("SELECT * FROM funcionario WHERE funcionario_id = %s", (funcionario_id,))
+        funcionario_atual = cursor.fetchone()
 
-        if not cargo_atual:
-            return False, f"Nenhum cargo encontrado com ID {cargo_id}."
+        if not funcionario_atual:
+            return False, f"Nenhum Funcionário encontrado com ID {funcionario_id}."
 
-        # 2) Decide o valor final de cada campo
-        nome_final = cargo_atual["cargo_nome"] if novo_nome is None else novo_nome
-        estoque_final = cargo_atual["pode_gerenciar_estoque"] if novo_estoque is None else novo_estoque
-        vendas_final = cargo_atual["pode_fazer_vendas"] if novas_vendas is None else novas_vendas
+        # 2) Decidir valores finais
+        id_cargo_final = funcionario_atual["cargo_id"] if novo_cargo_id is None else novo_cargo_id
+        nome_final = funcionario_atual["nome"] if novo_nome is None else novo_nome
+        email_final = funcionario_atual["email"] if novo_email is None else novo_email
+        cpf_final = funcionario_atual["cpf"] if novo_cpf is None else novo_cpf
+        telefone_final = funcionario_atual["telefone"] if novo_telefone is None else novo_telefone
+        admissao_final = funcionario_atual["data_admissao"] if novo_data_admissao is None else novo_data_admissao
+        termino_final = funcionario_atual["data_termino"] if novo_data_termino is None else novo_data_termino
+        salario_final = funcionario_atual["salario"] if novo_salario is None else novo_salario
+        ativo_final = funcionario_atual["ativo"] if novo_ativo is None else novo_ativo
 
-        # 3) Executa o UPDATE
-        query = "UPDATE cargo SET cargo_nome = %s, pode_gerenciar_estoque = %s, pode_fazer_vendas = %s WHERE cargo_id = %s"
+        # 3) Query correta
+        query = """
+            UPDATE funcionario
+            SET cargo_id = %s,
+                nome = %s,
+                email = %s,
+                cpf = %s,
+                telefone = %s,
+                data_admissao = %s,
+                data_termino = %s,
+                salario = %s,
+                ativo = %s
+            WHERE funcionario_id = %s
+        """
 
-        cursor.execute(query, (nome_final, estoque_final, vendas_final, cargo_id))
+        # 4) Parâmetros NA ORDEM CERTA
+        params = (
+            id_cargo_final,
+            nome_final,
+            email_final,
+            cpf_final,
+            telefone_final,
+            admissao_final,
+            termino_final,
+            salario_final,
+            ativo_final,
+            funcionario_id     
+        )
+
+        cursor.execute(query, params)
         conexao.commit()
 
-        return True, "Cargo atualizado com sucesso."
+        return True, f"Funcionário {nome_final} atualizado com sucesso."
 
     except Error as e:
         return False, f"Erro ao atualizar: {e}"
@@ -86,20 +271,21 @@ def atualizar_cargo(cargo_id, novo_nome, novo_estoque, novas_vendas):
         conexao.close()
 
 
+
 # --- DELETE (Deletar) ---
-def deletar_cargo(cargo_id):
-    query = "DELETE FROM cargo WHERE cargo_id = %s"
+def deletar_funcionario(funcionario_id):
+    query = "DELETE FROM funcionario WHERE funcionario_id = %s"
     conexao = conectar_bd()
     if conexao:
         try:
             cursor = conexao.cursor()
-            cursor.execute(query, (cargo_id,))
+            cursor.execute(query, (funcionario_id,))
             conexao.commit()
 
             if cursor.rowcount == 0:
-                return False, f"Nenhum cargo encontrado com esse id {cargo_id}."
+                return False, f"Nenhum Funcionário encontrado com esse id {funcionario_id}."
             else:
-                return True, f"Cargo {cargo_id} foi deletado com sucesso."
+                return True, f"Funcionário {funcionario_id} foi deletado com sucesso."
         except Error as e:
             return False, f"Erro ao deletar dados: {e}"
         finally:
@@ -107,13 +293,7 @@ def deletar_cargo(cargo_id):
             conexao.close()
     return False, "Falha ao conectar no banco de dados."
 
-# --- 3. Classe da Aplicação GUI (Tkinter) ---
-# Importações necessárias para a GUI
-import tkinter as tk
-from tkinter import ttk  # 'themed tk' para widgets com aparência mais moderna
-from tkinter import messagebox # Para caixas de diálogo (pop-ups) de informação, erro, aviso
-
-class JanelaCargos:
+class JanelaFuncionarios:
     
     # O método __init__ é o "construtor" da classe. 
     # É executado automaticamente quando um novo objeto AplicacaoCRUD é criado.
@@ -122,14 +302,14 @@ class JanelaCargos:
         
         # --- Configuração da Janela Principal ---
         self.root = tk.Toplevel(master) 
-        self.root.title("Gerenciador de Cragos (CRUD)")
+        self.root.title("Gerenciador de Funcionários (CRUD)")
         self.root.geometry("1000x600") 
         
         
         
 
         # --- Frame para os campos de entrada (Formulário) ---
-        frame_formulario = ttk.LabelFrame(self.root, text="Formulário de Cargos")
+        frame_formulario = ttk.LabelFrame(self.root, text="Formulário de Funcionários")
         frame_formulario.pack(padx=10, pady=10, fill="x")
         
         # --- Widgets dentro do Frame do Formulário (usando .grid()) ---
@@ -137,17 +317,43 @@ class JanelaCargos:
         self.entry_nome = ttk.Entry(frame_formulario, width=40)
         self.entry_nome.grid(row=0, column=1, padx=5, pady=5)
         
-        ttk.Label(frame_formulario, text="ID (p/Atualizar/Deletar):").grid(row=1, column=0, padx=5, pady=5, sticky="w")
-        self.entry_id = ttk.Entry(frame_formulario)
-        self.entry_id.grid(row=1, column=1, padx=5, pady=5)
+        ttk.Label(frame_formulario, text="ID Cargo:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.entry_idCargo = ttk.Entry(frame_formulario)
+        self.entry_idCargo.grid(row=1, column=1, padx=5, pady=5)
         
-        ttk.Label(frame_formulario, text="Pode gerenciar estoque? (S/N): ").grid(row=0, column=3, padx=5, pady=5, sticky="w")
-        self.entry_gerencia = ttk.Entry(frame_formulario)
-        self.entry_gerencia.grid(row=0, column=4, padx=5, pady=5)
+        ttk.Label(frame_formulario, text="ID (p/Atualizar/Deletar):").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        self.entry_id = ttk.Entry(frame_formulario)
+        self.entry_id.grid(row=2, column=1, padx=5, pady=5)
+        
+        ttk.Label(frame_formulario, text="Email:").grid(row=0, column=3, padx=5, pady=5, sticky="w")
+        self.entry_email = ttk.Entry(frame_formulario)
+        self.entry_email.grid(row=0, column=4, padx=5, pady=5)
+        
+        ttk.Label(frame_formulario, text="CPF:").grid(row=1, column=3, padx=5, pady=5, sticky="w")
+        self.entry_cpf = ttk.Entry(frame_formulario)
+        self.entry_cpf.grid(row=1, column=4, padx=5, pady=5)
+        
+        ttk.Label(frame_formulario, text="Telefone:").grid(row=2, column=3, padx=5, pady=5, sticky="w")
+        self.entry_telefone = ttk.Entry(frame_formulario)
+        self.entry_telefone.grid(row=2, column=4, padx=5, pady=5)
+        
+        ttk.Label(frame_formulario, text="Salário:").grid(row=0, column=6, padx=5, pady=5, sticky="w")
+        self.entry_salario = ttk.Entry(frame_formulario)
+        self.entry_salario.grid(row=0, column=7, padx=5, pady=5)
+        
+        ttk.Label(frame_formulario, text="Data Admissão dd/mm/aaaa:").grid(row=1, column=6, padx=5, pady=5, sticky="w")
+        self.entry_admissao = ttk.Entry(frame_formulario)
+        self.entry_admissao.grid(row=1, column=7, padx=5, pady=5)
+        
+        ttk.Label(frame_formulario, text="Data Término dd/mm/aaaa:").grid(row=2, column=6, padx=5, pady=5, sticky="w")
+        self.entry_termino = ttk.Entry(frame_formulario)
+        self.entry_termino.grid(row=2, column=7, padx=5, pady=5)
+        
+        ttk.Label(frame_formulario, text="Usuário está ativo? (S/N)").grid(row=0, column=8, padx=5, pady=5, sticky="w")
+        self.entry_ativo = ttk.Entry(frame_formulario)
+        self.entry_ativo.grid(row=0, column=9, padx=5, pady=5)
 
-        ttk.Label(frame_formulario, text="Pode fazer vendas? (S/N):").grid(row=1, column=3, padx=5, pady=5, sticky="w")
-        self.entry_venda = ttk.Entry(frame_formulario)
-        self.entry_venda.grid(row=1, column=4, padx=5, pady=5)
+        
 
 
         
@@ -156,21 +362,24 @@ class JanelaCargos:
         frame_botoes = ttk.Frame(self.root)
         frame_botoes.pack(pady=5)
 
-        self.btn_adicionar = ttk.Button(frame_botoes, text="Adicionar", command=self.adicionar_cargo_gui)
+        self.btn_adicionar = ttk.Button(frame_botoes, text="Adicionar", command=self.adicionar_funcionario_gui)
         self.btn_adicionar.grid(row=0, column=0, padx=5)
         
-        self.btn_deletar = ttk.Button(frame_botoes, text="Deletar", command=self.deletar_cargo_gui)
+        self.btn_deletar = ttk.Button(frame_botoes, text="Deletar", command=self.deletar_funcionario_gui)
         self.btn_deletar.grid(row=0, column=1, padx=5)
         
-        self.btn_atualizar = ttk.Button(frame_botoes, text="Atualizar", command=self.atualizar_cargo_gui)
+        self.btn_atualizar = ttk.Button(frame_botoes, text="Atualizar", command=self.atualizar_funcionario_gui)
         self.btn_atualizar.grid(row=0, column=2, padx=5)
+        
+        # self.btn_atualizar = ttk.Button(frame_botoes, text="Relatório", command=self.relatorio)
+        # self.btn_atualizar.grid(row=0, column=2, padx=5)
 
         # --- Frame para a Lista (Treeview) ---
         
-        frame_lista = ttk.LabelFrame(self.root, text="Lista de Cargos")
+        frame_lista = ttk.LabelFrame(self.root, text="Lista de Funcionários")
         frame_lista.pack(padx=10, pady=10, fill="both", expand=True)
 
-        colunas = ('ID', 'Nome', 'Pode Gerenciar Estoque?', 'Pode Fazer Vendas?')
+        colunas = ('ID', 'Cargo ID', 'Nome', 'Email', 'CPF', 'Telefone', 'Data Admissão', 'Data Término', 'Salário', 'Está ativo?')
         
         self.tree = ttk.Treeview(frame_lista, columns=colunas, show='headings')
 
@@ -196,27 +405,38 @@ class JanelaCargos:
     # --- Funções de Callback (Ações da GUI) ---
 
     def atualizar_treeview(self):
-        """Limpa e recarrega a lista de cargos no Treeview."""
         
         for i in self.tree.get_children():
             self.tree.delete(i)
         
-        cargos = listar_cargos()
-        if cargos:
-            for cargo in cargos:
+        funcionarios = listar_funcionarios()
+        if funcionarios:
+            for funcionario in funcionarios:
                 self.tree.insert('', tk.END, values=(
-                    cargo['cargo_id'],
-                    cargo['cargo_nome'],
-                    cargo['pode_gerenciar_estoque'],
-                    cargo['pode_fazer_vendas'],
+                    funcionario['funcionario_id'],
+                    funcionario['cargo_id'],
+                    funcionario['nome'],
+                    funcionario['email'],
+                    funcionario['cpf'],
+                    funcionario['telefone'],
+                    funcionario['data_admissao'],
+                    funcionario['data_termino'],
+                    funcionario['salario'],
+                    funcionario['ativo']
                 ))
 
     def limpar_campos(self):
         """Limpa todos os campos de entrada do formulário."""
         self.entry_nome.delete(0, tk.END)
+        self.entry_idCargo.delete(0, tk.END)
         self.entry_id.delete(0, tk.END)
-        self.entry_gerencia.delete(0, tk.END)
-        self.entry_venda.delete(0, tk.END)
+        self.entry_telefone.delete(0, tk.END)
+        self.entry_cpf.delete(0, tk.END)
+        self.entry_email.delete(0, tk.END)
+        self.entry_admissao.delete(0, tk.END)
+        self.entry_termino.delete(0, tk.END)
+        self.entry_salario.delete(0, tk.END)
+        self.entry_ativo.delete(0, tk.END)
         
         
     def on_tree_select(self, event):
@@ -231,50 +451,54 @@ class JanelaCargos:
             self.limpar_campos()
             
             self.entry_id.insert(0, valores[0])
-            self.entry_nome.insert(0, valores[1])
-            self.entry_gerencia.insert(0, valores[2])
-            self.entry_venda.insert(0, valores[3])
+            self.entry_idCargo.insert(0, valores[1])
+            self.entry_nome.insert(0, valores[2])
+            self.entry_email.insert(0, valores[3])
+            self.entry_cpf.insert(0, valores[4])
+            self.entry_telefone.insert(0, valores[5])
+            self.entry_admissao.insert(0, valores[6])
+            self.entry_termino.insert(0, valores[7])
+            self.entry_salario.insert(0, valores[8])
+            self.entry_ativo.insert(0, valores[9])
             
-            self.status_label.config(text=f"Cargo ID {valores[0]} selecionado.")
+            self.status_label.config(text=f"Funcionário ID {valores[0]} selecionado.")
         except Exception as e:
             self.status_label.config(text=f"Erro ao selecionar: {e}")
     
     # def buscar_nome_por_id(self, id_cargo):
     #     return self.nome_cargos.get(id_cargo, None)
 
-    def adicionar_cargo_gui(self):
+    def adicionar_funcionario_gui(self):
         """Coleta dados dos campos e chama a função de inserir."""
         
         # 'get()': Pega o texto atual da caixa de entrada.
         # 'strip()': Remove espaços em branco do início e do fim.
+        id_cargo = self.entry_idCargo.get().strip()
         nome = self.entry_nome.get().strip()
-        gerencia = self.entry_gerencia.get().strip().upper()
-        venda = self.entry_venda.get().strip().upper()
+        email = self.entry_email.get().strip()
+        cpf = self.entry_cpf.get().strip()
+        telefone = self.entry_telefone.get().strip()
+        admissao = self.entry_admissao.get().strip()
+        termino = self.entry_termino.get().strip()
+        salario = self.entry_salario.get().strip()
+        ativo = self.entry_ativo.get().strip().upper()
         
 
         # Validação simples
-        if not all([nome, gerencia, venda]):
+        if not all([id_cargo, nome, email, cpf, telefone, admissao, termino, salario, ativo]):
             messagebox.showwarning("Campos Vazios", "Todos os campos (exceto ID) devem ser preenchidos.")
             return 
         
-        if gerencia == "S":
-            gerencia = 1
-        elif gerencia == "N":
-            gerencia = 0
+        if ativo == "S" or ativo == "SIM":
+            ativo = 1
+        elif ativo == "N" or ativo == "NÃO" or ativo == "NAO":
+            ativo = 0
         else:
-            messagebox.showwarning("Valor incorreto","'Pode Gerenciar Estoque' só aceita os valores S e N.")
+            messagebox.showwarning("Valor incorreto","'Ativo' só aceita os valores S/N ou Sim/Não")
             return
-            
-        if venda == "S":
-            venda = 1
-        elif venda == "N":
-            venda = 0
-        else:
-            messagebox.showwarning("Valor incorreto","'Pode Fazer Vendas' só aceita os valores S e N.")
-            return       
 
         # Chama a função do CRUD (da Seção 2)
-        sucesso, mensagem = inserir_cargo(nome, gerencia, venda)
+        sucesso, mensagem = inserir_funcionario(id_cargo, nome, email, cpf, telefone, admissao, termino, salario, ativo)
         
         if sucesso:
             # 'messagebox.showinfo()': Exibe um pop-up de INFORMAÇÃO.
@@ -288,47 +512,107 @@ class JanelaCargos:
         self.status_label.config(text=mensagem)
         
         
-    def atualizar_cargo_gui(self):
+    def atualizar_funcionario_gui(self):
         try:
-            cargo_id = int(self.entry_id.get().strip())
+            funcionario_id = int(self.entry_id.get().strip())
         except ValueError:
             messagebox.showerror("Erro", "O ID deve ser um número inteiro.")
             return
         
+        novo_idCargo = self.entry_idCargo.get().strip()
         novo_nome = self.entry_nome.get().strip()
-        novo_gerencia = self.entry_gerencia.get().strip().upper()
-        novo_venda = self.entry_venda.get().strip().upper()
+        novo_email = self.entry_email.get().strip()
+        novo_cpf = self.entry_cpf.get().strip()
+        novo_telefone = self.entry_telefone.get().strip()
+        novo_admissao = self.entry_admissao.get().strip()
+        novo_termino = self.entry_termino.get().strip()
+        novo_salario = self.entry_salario.get().strip()
+        novo_ativo = self.entry_ativo.get().strip().upper()
 
+
+        # ---- Cargo ID ----
+        if novo_idCargo == "":
+            novo_idCargo = None
+        else:
+            try:
+                novo_idCargo = int(novo_idCargo)
+            except ValueError:
+                messagebox.showerror("Erro", "O ID do cargo deve ser numérico.")
+                return
 
         # ---- Nome ----
         if novo_nome == "":
-            novo_nome = None  # não atualizar
+            novo_nome = None
 
-        # ---- Gerência ----
-        if novo_gerencia == "":
-            novo_gerencia = None  # não atualizar
-        elif novo_gerencia in ("S", "1"):
-            novo_gerencia = 1
-        elif novo_gerencia in ("N", "0"):
-            novo_gerencia = 0
+        # ---- Email ----
+        if novo_email == "":
+            novo_email = None
+
+        # ---- CPF ----
+        if novo_cpf == "":
+            novo_cpf = None
+
+        # ---- Telefone ----
+        if novo_telefone == "":
+            novo_telefone = None
+
+        # ---- Data de Admissão ----
+        if novo_admissao == "":
+            novo_admissao = None  # mantém no BD
         else:
-            messagebox.showerror("Erro", "Campo Gerência deve ser S/N ou 1/0.")
+            # opcional: validar formato YYYY-MM-DD
+            try:
+                str(novo_admissao)
+            except:
+                messagebox.showerror("Erro", "Data de admissão inválida.")
+                return
+
+        # ---- Data de Término ----
+        if novo_termino == "":
+            novo_termino = None
+        else:
+            try:
+                str(novo_termino)
+            except:
+                messagebox.showerror("Erro", "Data de término inválida.")
+                return
+
+        # ---- Salário ----
+        if novo_salario == "":
+            novo_salario = None
+        else:
+            try:
+                novo_salario = float(novo_salario)
+            except ValueError:
+                messagebox.showerror("Erro", "O salário deve ser numérico.")
+                return
+
+        # ---- Ativo (S/N ou 1/0) ----
+        if novo_ativo == "":
+            novo_ativo = None
+        elif novo_ativo in ("S", "SIM", "1"):
+            novo_ativo = 1
+        elif novo_ativo in ("N", "NAO", "NÃO", "0"):
+            novo_ativo = 0
+        else:
+            messagebox.showerror("Erro", "Campo 'Ativo' deve ser S/N ou 1/0.")
             return
 
-        # ---- Vendas ----
-        if novo_venda == "":
-            novo_venda = None
-        elif novo_venda in ("S", "1"):
-            novo_venda = 1
-        elif novo_venda in ("N", "0"):
-            novo_venda = 0
-        else:
-            messagebox.showerror("Erro", "Campo Vendas deve ser S/N ou 1/0.")
-            return
+        # ---- Chama a função de atualização real ----
+        sucesso, mensagem = atualizar_funcionario(
+            funcionario_id,
+            novo_idCargo,
+            novo_nome,
+            novo_email,
+            novo_cpf,
+            novo_telefone,
+            novo_admissao,
+            novo_termino,
+            novo_salario,
+            novo_ativo
+        )
 
-        # ---- Chama a função de atualização ----
-        sucesso, mensagem = atualizar_cargo(cargo_id, novo_nome, novo_gerencia, novo_venda)
-
+        # ---- Retorno para o usuário ----
         if sucesso:
             messagebox.showinfo("Sucesso", mensagem)
             self.atualizar_treeview()
@@ -337,10 +621,9 @@ class JanelaCargos:
             messagebox.showerror("Erro", mensagem)
 
 
-    def deletar_cargo_gui(self):
+    def deletar_funcionario_gui(self):
         """Coleta o ID do campo e pede confirmação para deletar."""
         id_str = self.entry_id.get().strip()
-        nome_cargo = self.entry_nome.get().strip()
 
         
         if not id_str:
@@ -356,10 +639,10 @@ class JanelaCargos:
 
         # 'messagebox.askyesno()': Exibe um pop-up de SIM/NÃO.
         # Retorna True se o usuário clicar em "Sim" e False se clicar em "Não".
-        if messagebox.askyesno("Confirmar Exclusão", f"Tem CERTEZA que deseja deletar o cargo: {id}?"):
+        if messagebox.askyesno("Confirmar Exclusão", f"Tem CERTEZA que deseja deletar o Funcionário: {id}?"):
             
             # Só executa se o usuário confirmou
-            sucesso, mensagem = deletar_cargo(id)
+            sucesso, mensagem = deletar_funcionario(id)
             
             if sucesso:
                 messagebox.showinfo("Sucesso", mensagem)
