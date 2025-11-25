@@ -5,7 +5,7 @@ DB_CONFIG = {
     'host': 'localhost',
     'port': 3306,
     'user': 'root',
-    'password': 'F&rradura01',
+    'password': 'admin',
     'database': 'GestorPro_BD'
 }
 
