@@ -1,12 +1,13 @@
 from datetime import datetime
 from config.config_bd import conectar_bd
 from mysql.connector import Error
+import re
 import tkinter as tk
 from tkinter import ttk  # 'themed tk' para widgets mais modernos
 from tkinter import messagebox # Para pop-ups de confirmação e erro
 
 # -----------------------------
-# 1. CONVERSORES DE DATA
+# CONVERSORES DE DATA
 # -----------------------------
 
 def converter_para_mysql(data_br):
@@ -23,7 +24,7 @@ def converter_para_br(data_mysql):
         
 
 # -----------------------------
-# 2. VALIDAÇÃO DE CPF
+# VALIDAÇÃO DE CPF
 # -----------------------------
 
 def validar_cpf(cpf):
@@ -45,7 +46,7 @@ def validar_cpf(cpf):
 
 
 # -----------------------------
-# 3. VALIDAÇÃO DE TELEFONE
+# VALIDAÇÃO DE TELEFONE
 # -----------------------------
 
 def validar_telefone(telefone):
@@ -54,7 +55,7 @@ def validar_telefone(telefone):
 
 
 # -----------------------------
-# 4. VALIDAÇÃO DE DATAS
+# VALIDAÇÃO DE DATAS
 # -----------------------------
 
 def validar_datas(data_adm_br, data_term_br):
@@ -72,6 +73,40 @@ def validar_datas(data_adm_br, data_term_br):
 
     return True, ""
 
+# -----------------------------
+# VALIDAÇÃO DE NOME
+# -----------------------------
+def validar_nome(nome):
+    """Valida nomes com acentos."""
+    if len(nome.strip()) < 2:
+        return False
+    
+    return all(c.isalpha() or c == " " for c in nome)
+
+# -----------------------------
+# VALIDAÇÃO DE EMAIL
+# -----------------------------
+def validar_email(email):
+    """Valida um e-mail simples usando regex."""
+    padrao = r'^[\w\.-]+@[\w\.-]+\.\w+$'
+    return re.match(padrao, email) is not None
+
+# -----------------------------
+# VALIDAÇÃO DE SALÁRIO
+# -----------------------------
+def validar_salario(salario):
+    # Aceitar vírgula como separador decimal
+    if isinstance(salario, str):
+        salario = salario.replace(",", ".")
+
+    try:
+        valor = float(salario)
+        if valor <= 0:
+            return False
+        return True
+    except ValueError:
+        return False
+
 # --- CREATE (Criar) ---
 def inserir_funcionario(cargo_id, nome, email, cpf, telefone, data_admissao, data_termino, salario, ativo):
 
@@ -88,30 +123,66 @@ def inserir_funcionario(cargo_id, nome, email, cpf, telefone, data_admissao, dat
         return False, "Telefone inválido! Deve ter 10 ou 11 dígitos."
 
     # -------------------------
+    # VALIDAR NOME
+    # -------------------------
+    if not validar_nome(nome):
+        return False, "Nome inválido! Digite apenas letras e espaços."
+
+    # -------------------------
+    # VALIDAR EMAIL
+    # -------------------------
+    if not validar_email(email):
+        return False, "E-mail inválido! Exemplo válido: nome@dominio.com"
+    
+    # -------------------------
+    # VALIDAR SALÁRIO
+    # -------------------------
+    if not validar_salario(salario):
+        return False, "Salário inválido! Informe um valor numérico maior que zero."
+
+
+    # -------------------------
     # VALIDAR DATAS
     # -------------------------
     ok, erro = validar_datas(data_admissao, data_termino)
     if not ok:
         return False, erro
 
-    # Após validar, converter para MySQL:
+    # Converter para formato MySQL
     data_admissao = converter_para_mysql(data_admissao)
     data_termino = converter_para_mysql(data_termino) if data_termino else None
-    query = "INSERT INTO funcionario (cargo_id, nome, email, cpf, telefone, data_admissao, data_termino, salario, ativo) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
-    
+
+    # -------------------------
+    # QUERY
+    # -------------------------
+    query = """
+        INSERT INTO funcionario 
+        (cargo_id, nome, email, cpf, telefone, data_admissao, data_termino, salario, ativo) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
+
     conexao = conectar_bd()
     if conexao:
         try:
             cursor = conexao.cursor()
-            cursor.execute(query, (cargo_id, nome, email, cpf, telefone, data_admissao, data_termino, salario, ativo))
+            salario = float(str(salario).replace(",", "."))
+            cursor.execute(query, (
+                cargo_id, nome, email, cpf, telefone,
+                data_admissao, data_termino, salario, ativo
+            ))
             conexao.commit()
-            return True, (f"\n-> Funcionário '{nome}' Adicionado com sucesso (ID: {cursor.lastrowid}).")
+
+            return True, f"\n-> Funcionário '{nome}' adicionado com sucesso (ID: {cursor.lastrowid})."
+
         except Error as e:
             return False, f"Erro ao inserir dados: {e}"
+
         finally:
             cursor.close()
             conexao.close()
+
     return False, "Falha ao conectar no banco de dados."
+
 
 # --- READ (Ler/Consultar) ---
 def listar_funcionarios():
@@ -136,73 +207,43 @@ def listar_funcionarios():
 # --- UPDATE (Atualizar) ---
 def atualizar_funcionario(funcionario_id, novo_cargo_id, novo_nome, novo_email, novo_cpf,
                           novo_telefone, novo_data_admissao, novo_data_termino,
-                        novo_salario, novo_ativo):
-        # -----------------------------
-    # 1. CONVERSORES DE DATA
-    # -----------------------------
+                          novo_salario, novo_ativo):
 
-    def converter_para_mysql(data_br):
-        try:
-            return datetime.strptime(data_br, "%d/%m/%Y").strftime("%Y-%m-%d")
-        except ValueError:
-            return None
+    # -------------------------
+    # VALIDAR CAMPOS OPCIONAIS
+    # -------------------------
 
-    def converter_para_br(data_mysql):
-        try:
-            return datetime.strptime(data_mysql, "%Y-%m-%d").strftime("%d/%m/%Y")
-        except ValueError:
-            return ""
+    if novo_nome is not None and not validar_nome(novo_nome):
+        return False, "Nome inválido! Use apenas letras e espaços."
 
+    if novo_email is not None and not validar_email(novo_email):
+        return False, "E-mail inválido! Exemplo: nome@dominio.com"
 
-    # -----------------------------
-    # 2. VALIDAÇÃO DE CPF
-    # -----------------------------
+    if novo_cpf is not None and not validar_cpf(novo_cpf):
+        return False, "CPF inválido! Verifique e tente novamente."
 
-    def validar_cpf(cpf):
-        cpf = ''.join(filter(str.isdigit, cpf))
+    if novo_telefone is not None and not validar_telefone(novo_telefone):
+        return False, "Telefone inválido! Deve ter 10 ou 11 dígitos."
+    
+    if novo_salario is not None and not validar_salario(novo_salario):
+        return False, "Salário inválido! Informe um valor numérico maior que zero."
 
-        if len(cpf) != 11:
-            return False
+    # -------------------------
+    # VALIDAR DATAS (somente se o usuário enviou novas datas)
+    # -------------------------
+    if novo_data_admissao is not None or novo_data_termino is not None:
 
-        if cpf == cpf[0] * 11:
-            return False
+        ok, erro = validar_datas(novo_data_admissao or "", novo_data_termino or "")
+        if not ok:
+            return False, erro
 
-        for i in range(9, 11):
-            soma = sum(int(cpf[num]) * ((i + 1) - num) for num in range(i))
-            digito = ((soma * 10) % 11) % 10
-            if digito != int(cpf[i]):
-                return False
+        # Converter para MySQL
+        if novo_data_admissao is not None:
+            novo_data_admissao = converter_para_mysql(novo_data_admissao)
 
-        return True
+        if novo_data_termino:
+            novo_data_termino = converter_para_mysql(novo_data_termino)
 
-
-    # -----------------------------
-    # 3. VALIDAÇÃO DE TELEFONE
-    # -----------------------------
-
-    def validar_telefone(telefone):
-        telefone = ''.join(filter(str.isdigit, telefone))
-        return 10 <= len(telefone) <= 11
-
-
-    # -----------------------------
-    # 4. VALIDAÇÃO DE DATAS
-    # -----------------------------
-
-    def validar_datas(data_adm_br, data_term_br):
-        data_adm = converter_para_mysql(data_adm_br)
-        if not data_adm:
-            return False, "Data de admissão inválida! Use o formato DD/MM/AAAA."
-
-        if data_term_br:
-            data_term = converter_para_mysql(data_term_br)
-            if not data_term:
-                return False, "Data de término inválida! Use o formato DD/MM/AAAA."
-
-            if datetime.strptime(data_term, "%Y-%m-%d") < datetime.strptime(data_adm, "%Y-%m-%d"):
-                return False, "A data de término não pode ser anterior à data de admissão."
-
-        return True, ""
 
     conexao = conectar_bd()
     if not conexao:
@@ -218,8 +259,8 @@ def atualizar_funcionario(funcionario_id, novo_cargo_id, novo_nome, novo_email, 
         if not funcionario_atual:
             return False, f"Nenhum Funcionário encontrado com ID {funcionario_id}."
 
-        # 2) Decidir valores finais
-        id_cargo_final = funcionario_atual["cargo_id"] if novo_cargo_id is None else novo_cargo_id
+        # 2) Escolher valores finais
+        cargo_final = funcionario_atual["cargo_id"] if novo_cargo_id is None else novo_cargo_id
         nome_final = funcionario_atual["nome"] if novo_nome is None else novo_nome
         email_final = funcionario_atual["email"] if novo_email is None else novo_email
         cpf_final = funcionario_atual["cpf"] if novo_cpf is None else novo_cpf
@@ -229,7 +270,7 @@ def atualizar_funcionario(funcionario_id, novo_cargo_id, novo_nome, novo_email, 
         salario_final = funcionario_atual["salario"] if novo_salario is None else novo_salario
         ativo_final = funcionario_atual["ativo"] if novo_ativo is None else novo_ativo
 
-        # 3) Query correta
+        # 3) Executar UPDATE
         query = """
             UPDATE funcionario
             SET cargo_id = %s,
@@ -244,9 +285,8 @@ def atualizar_funcionario(funcionario_id, novo_cargo_id, novo_nome, novo_email, 
             WHERE funcionario_id = %s
         """
 
-        # 4) Parâmetros NA ORDEM CERTA
         params = (
-            id_cargo_final,
+            cargo_final,
             nome_final,
             email_final,
             cpf_final,
@@ -255,9 +295,9 @@ def atualizar_funcionario(funcionario_id, novo_cargo_id, novo_nome, novo_email, 
             termino_final,
             salario_final,
             ativo_final,
-            funcionario_id     
+            funcionario_id
         )
-
+        salario_final = float(str(salario_final).replace(",", "."))
         cursor.execute(query, params)
         conexao.commit()
 
@@ -269,6 +309,7 @@ def atualizar_funcionario(funcionario_id, novo_cargo_id, novo_nome, novo_email, 
     finally:
         cursor.close()
         conexao.close()
+
 
 
 
@@ -292,6 +333,33 @@ def deletar_funcionario(funcionario_id):
             cursor.close()
             conexao.close()
     return False, "Falha ao conectar no banco de dados."
+
+def relatorio_funcionarios_por_cargo():
+    query = """
+        SELECT c.cargo_nome AS cargo, COUNT(f.funcionario_id) AS quantidade
+        FROM funcionario f
+        JOIN cargo c ON f.cargo_id = c.cargo_id
+        GROUP BY f.cargo_id
+        ORDER BY quantidade DESC;
+    """
+
+    conexao = conectar_bd()
+    if not conexao:
+        return None
+
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        cursor.execute(query)
+        return cursor.fetchall()
+
+    except Error as e:
+        print("Erro ao gerar relatório:", e)
+        return None
+
+    finally:
+        cursor.close()
+        conexao.close()
+
 
 class JanelaFuncionarios:
     
@@ -371,8 +439,8 @@ class JanelaFuncionarios:
         self.btn_atualizar = ttk.Button(frame_botoes, text="Atualizar", command=self.atualizar_funcionario_gui)
         self.btn_atualizar.grid(row=0, column=2, padx=5)
         
-        # self.btn_atualizar = ttk.Button(frame_botoes, text="Relatório", command=self.relatorio)
-        # self.btn_atualizar.grid(row=0, column=2, padx=5)
+        self.btn_atualizar = ttk.Button(frame_botoes, text="Relatório", command=self.janela_relatorio_funcionarios)
+        self.btn_atualizar.grid(row=0, column=3, padx=5)
 
         # --- Frame para a Lista (Treeview) ---
         
@@ -485,7 +553,7 @@ class JanelaFuncionarios:
         
 
         # Validação simples
-        if not all([id_cargo, nome, email, cpf, telefone, admissao, termino, salario, ativo]):
+        if not all([id_cargo, nome, email, cpf, telefone, admissao, salario, ativo]):
             messagebox.showwarning("Campos Vazios", "Todos os campos (exceto ID) devem ser preenchidos.")
             return 
         
@@ -655,6 +723,34 @@ class JanelaFuncionarios:
         else:
             # Se o usuário clicou em "Não"
             self.status_label.config(text="Operação de exclusão cancelada.")
+    def janela_relatorio_funcionarios(self):
+        dados = relatorio_funcionarios_por_cargo()
+
+        if not dados:
+            messagebox.showerror("Erro", "Não foi possível gerar o relatório.")
+            return
+
+        janela = tk.Toplevel(self.root)
+        janela.title("Relatório: Funcionários por Cargo")
+        janela.geometry("450x400")
+
+        frame = ttk.LabelFrame(janela, text="Funcionários por Cargo")
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        colunas = ("Cargo", "Quantidade")
+
+        tree = ttk.Treeview(frame, columns=colunas, show="headings")
+        tree.heading("Cargo", text="Cargo")
+        tree.heading("Quantidade", text="Quantidade")
+
+        tree.column("Cargo", width=250)
+        tree.column("Quantidade", width=120, anchor="center")
+
+        tree.pack(fill="both", expand=True)
+
+        for linha in dados:
+            tree.insert("", tk.END, values=(linha["cargo"], linha["quantidade"]))
+
 
 
 
