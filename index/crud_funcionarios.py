@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from config.config_bd import conectar_bd
 from mysql.connector import Error
 import re
@@ -17,10 +17,17 @@ def converter_para_mysql(data_br):
         return None
 
 def converter_para_br(data_mysql):
-    try:
-        return datetime.strptime(data_mysql, "%Y-%m-%d").strftime("%d/%m/%Y")
-    except ValueError:
+    if not data_mysql or data_mysql in ("", "0000-00-00"):
         return ""
+
+    if isinstance(data_mysql, date):
+        return data_mysql.strftime("%d/%m/%Y")
+
+    try:
+        return datetime.strptime(str(data_mysql), "%Y-%m-%d").strftime("%d/%m/%Y")
+    except ValueError:
+        return str(data_mysql)
+
         
 
 # -----------------------------
@@ -473,13 +480,18 @@ class JanelaFuncionarios:
     # --- Funções de Callback (Ações da GUI) ---
 
     def atualizar_treeview(self):
-        
+
         for i in self.tree.get_children():
             self.tree.delete(i)
-        
+
         funcionarios = listar_funcionarios()
         if funcionarios:
             for funcionario in funcionarios:
+
+                # ---------- 🔄 Converter datas ----------
+                data_adm_br = converter_para_br(funcionario['data_admissao']) if funcionario['data_admissao'] else ""
+                data_term_br = converter_para_br(funcionario['data_termino']) if funcionario['data_termino'] else ""
+
                 self.tree.insert('', tk.END, values=(
                     funcionario['funcionario_id'],
                     funcionario['cargo_id'],
@@ -487,11 +499,12 @@ class JanelaFuncionarios:
                     funcionario['email'],
                     funcionario['cpf'],
                     funcionario['telefone'],
-                    funcionario['data_admissao'],
-                    funcionario['data_termino'],
+                    data_adm_br,        # ← Agora DDMMAAAA
+                    data_term_br,       # ← Agora DDMMAAAA
                     funcionario['salario'],
                     funcionario['ativo']
                 ))
+
 
     def limpar_campos(self):
         """Limpa todos os campos de entrada do formulário."""
@@ -524,8 +537,13 @@ class JanelaFuncionarios:
             self.entry_email.insert(0, valores[3])
             self.entry_cpf.insert(0, valores[4])
             self.entry_telefone.insert(0, valores[5])
-            self.entry_admissao.insert(0, valores[6])
-            self.entry_termino.insert(0, valores[7])
+            
+            data_adm_br = converter_para_br(valores[6]) if valores[6] else ""
+            data_term_br = converter_para_br(valores[7]) if valores[7] else ""
+
+            self.entry_admissao.insert(0, data_adm_br)
+            self.entry_termino.insert(0, data_term_br)
+            
             self.entry_salario.insert(0, valores[8])
             self.entry_ativo.insert(0, valores[9])
             
