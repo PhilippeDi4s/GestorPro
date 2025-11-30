@@ -1,8 +1,8 @@
 from config.config_bd import conectar_bd
 from mysql.connector import Error
 import tkinter as tk
-from tkinter import ttk  # 'themed tk' para widgets mais modernos
-from tkinter import messagebox # Para pop-ups de confirmação e erro
+from tkinter import ttk  
+from tkinter import messagebox 
 
 # --- 2. Funções do CRUD (A Lógica do Banco) ---
 # MODIFICADAS para retornar mensagens em vez de printar no console.

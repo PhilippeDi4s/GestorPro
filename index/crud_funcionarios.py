@@ -488,7 +488,6 @@ class JanelaFuncionarios:
         if funcionarios:
             for funcionario in funcionarios:
 
-                # ---------- 🔄 Converter datas ----------
                 data_adm_br = converter_para_br(funcionario['data_admissao']) if funcionario['data_admissao'] else ""
                 data_term_br = converter_para_br(funcionario['data_termino']) if funcionario['data_termino'] else ""
 
@@ -499,8 +498,8 @@ class JanelaFuncionarios:
                     funcionario['email'],
                     funcionario['cpf'],
                     funcionario['telefone'],
-                    data_adm_br,        # ← Agora DDMMAAAA
-                    data_term_br,       # ← Agora DDMMAAAA
+                    data_adm_br,        
+                    data_term_br,       
                     funcionario['salario'],
                     funcionario['ativo']
                 ))
