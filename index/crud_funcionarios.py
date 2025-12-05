@@ -460,7 +460,14 @@ class JanelaFuncionarios:
 
         for col in colunas:
             self.tree.heading(col, text=col)
-            self.tree.column(col, width=100 if col != 'Nome' else 200) 
+
+            if col == 'Nome':
+                self.tree.column(col, width=130)
+            elif col == 'Email':
+                self.tree.column(col, width=220)
+            else:
+                self.tree.column(col, width=110)
+
 
         # --- Barra de Rolagem (Scrollbar) ---
         
